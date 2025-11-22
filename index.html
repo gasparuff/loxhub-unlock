@@ -66,7 +66,7 @@
     }
 
     .knob{
-      position:relative;
+      position:absolute;
       z-index:3;
       width:56px;
       height:56px;
@@ -78,6 +78,7 @@
       box-shadow: 0 6px 18px rgba(2,6,23,0.6);
       transition: transform 120ms ease, left 120ms ease;
       left:10px;
+      top:10px;
       cursor:pointer;
       -webkit-tap-highlight-color: transparent;
       border:1px solid rgba(255,255,255,0.04);
@@ -169,7 +170,8 @@
   function updateDimensions() {
     containerRect = container.getBoundingClientRect();
     const knobRect = knob.getBoundingClientRect();
-    maxLeft = containerRect.width - knobRect.width - 10;
+    maxLeft = containerRect.width - knobRect.width - 20; // Account for padding on both sides
+    console.log('Updated dimensions:', { containerWidth: containerRect.width, knobWidth: knobRect.width, maxLeft });
   }
 
   updateDimensions();
@@ -187,25 +189,38 @@
     dragging = true;
     startX = e.clientX;
     knob.setPointerCapture(e.pointerId);
+    
+    // Disable transitions during drag for smooth movement
+    knob.style.transition = 'none';
+    progress.style.transition = 'none';
+    
+    e.preventDefault();
   });
 
   document.addEventListener('pointermove', e => {
     if (!dragging) return;
     const delta = e.clientX - startX;
     const newLeft = knobLeft + delta;
+    console.log('Moving:', { delta, newLeft, knobLeft });
     setKnobPos(newLeft);
-
-    // FIX: update knobLeft so dragging continues from new position
-    knobLeft = newLeft;
   });
 
-  document.addEventListener('pointerup', () => {
+  document.addEventListener('pointerup', e => {
     if (!dragging) return;
     dragging = false;
 
-    const knobRect = knob.getBoundingClientRect();
-    const relative = knobRect.left - containerRect.left;
-    const threshold = 0.75 * (containerRect.width - knobRect.width);
+    // Re-enable transitions
+    knob.style.transition = 'transform 120ms ease, left 120ms ease';
+    progress.style.transition = 'width 120ms linear';
+
+    // Calculate final position based on drag distance
+    const delta = e.clientX - startX;
+    const finalLeft = knobLeft + delta;
+    const clampedLeft = Math.max(10, Math.min(finalLeft, maxLeft + 10));
+    
+    // Check if we've reached the threshold
+    const relative = clampedLeft - 10;
+    const threshold = 0.75 * maxLeft;
 
     if (relative >= threshold) {
       knobLeft = maxLeft + 10;
@@ -232,8 +247,12 @@
       const text = await response.text();
 
       if (response.ok) {
-        statusEl.textContent = "Success: " + text;
-        statusEl.className = "status success";
+        statusEl.textContent = "";
+        statusEl.className = "status";
+        
+        // Reset the slider
+        knobLeft = 10;
+        setKnobPos(knobLeft);
       } else {
         statusEl.textContent = "Error: " + text;
         statusEl.className = "status error";
