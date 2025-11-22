@@ -233,6 +233,9 @@
           statusEl.textContent = "Error: " + text;
           statusEl.className = "status error";
         }
+
+        statusEl.textContent = "";
+
       } catch (err) {
         statusEl.textContent = "Network error – see console.";
         statusEl.className = "status error";
