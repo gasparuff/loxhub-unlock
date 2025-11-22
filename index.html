@@ -151,110 +151,113 @@
     </div>
   </div>
 
-  <script>
-    const RPC_URL = "https://ubmaawldxixfdrpiiaut.supabase.co/functions/v1/unlock";
+<script>
+  const RPC_URL = "https://ubmaawldxixfdrpiiaut.supabase.co/functions/v1/unlock";
 
-    const knob = document.getElementById('knob');
-    const container = document.getElementById('sliderContainer');
-    const progress = document.getElementById('progress');
-    const statusEl = document.getElementById('status');
-    const resetBtn = document.getElementById('resetBtn');
+  const knob = document.getElementById('knob');
+  const container = document.getElementById('sliderContainer');
+  const progress = document.getElementById('progress');
+  const statusEl = document.getElementById('status');
+  const resetBtn = document.getElementById('resetBtn');
 
-    let dragging = false;
-    let startX = 0;
-    let knobLeft = 10;
-    let maxLeft = 0;
-    let containerRect = null;
+  let dragging = false;
+  let startX = 0;
+  let knobLeft = 10;
+  let maxLeft = 0;
+  let containerRect = null;
 
-    function updateDimensions(){
-      containerRect = container.getBoundingClientRect();
-      const knobRect = knob.getBoundingClientRect();
-      maxLeft = containerRect.width - knobRect.width - 10;
-    }
+  function updateDimensions() {
+    containerRect = container.getBoundingClientRect();
+    const knobRect = knob.getBoundingClientRect();
+    maxLeft = containerRect.width - knobRect.width - 10;
+  }
 
-    updateDimensions();
-    window.addEventListener('resize', updateDimensions);
+  updateDimensions();
+  window.addEventListener('resize', updateDimensions);
 
-    function setKnobPos(px){
-      px = Math.max(10, Math.min(px, maxLeft + 10));
-      knob.style.left = px + 'px';
+  function setKnobPos(px) {
+    px = Math.max(10, Math.min(px, maxLeft + 10));
+    knob.style.left = px + 'px';
 
-      const progW = (px - 10) + knob.offsetWidth;
-      progress.style.width = Math.max(0, Math.min(containerRect.width - 20, progW)) + "px";
-    }
+    const progW = (px - 10) + knob.offsetWidth;
+    progress.style.width = Math.max(0, Math.min(containerRect.width - 20, progW)) + "px";
+  }
 
-    knob.addEventListener('pointerdown', e => {
-      dragging = true;
-      startX = e.clientX;
-      knob.setPointerCapture(e.pointerId);
-    });
+  knob.addEventListener('pointerdown', e => {
+    dragging = true;
+    startX = e.clientX;
+    knob.setPointerCapture(e.pointerId);
+  });
 
-    document.addEventListener('pointermove', e => {
-      if(!dragging) return;
-      const delta = e.clientX - startX;
-      const newLeft = knobLeft + delta;
-      setKnobPos(newLeft);
-    });
+  document.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const delta = e.clientX - startX;
+    const newLeft = knobLeft + delta;
+    setKnobPos(newLeft);
 
-    document.addEventListener('pointerup', () => {
-      if(!dragging) return;
-      dragging = false;
+    // FIX: update knobLeft so dragging continues from new position
+    knobLeft = newLeft;
+  });
 
-      const knobRect = knob.getBoundingClientRect();
-      const relative = knobRect.left - containerRect.left;
-      const threshold = 0.75 * (containerRect.width - knobRect.width);
+  document.addEventListener('pointerup', () => {
+    if (!dragging) return;
+    dragging = false;
 
-      if(relative >= threshold){
-        setKnobPos(maxLeft + 10);
-        onUnlocked();
-      } else {
-        knobLeft = 10;
-        setKnobPos(knobLeft);
-        statusEl.textContent = 'Not far enough — try again.';
-      }
-    });
+    const knobRect = knob.getBoundingClientRect();
+    const relative = knobRect.left - containerRect.left;
+    const threshold = 0.75 * (containerRect.width - knobRect.width);
 
-    async function onUnlocked(){
-      statusEl.textContent = "Sending unlock request...";
-
-      try {
-        const response = await fetch(RPC_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: "{}"
-        });
-
-        const text = await response.text();
-
-        if(response.ok){
-          statusEl.textContent = "Success: " + text;
-          statusEl.className = "status success";
-        } else {
-          statusEl.textContent = "Error: " + text;
-          statusEl.className = "status error";
-        }
-
-        statusEl.textContent = "";
-
-      } catch (err) {
-        statusEl.textContent = "Network error – see console.";
-        statusEl.className = "status error";
-        console.error(err);
-      }
-    }
-
-    resetBtn.addEventListener('click', () => {
+    if (relative >= threshold) {
+      knobLeft = maxLeft + 10;
+      setKnobPos(knobLeft);
+      onUnlocked();
+    } else {
       knobLeft = 10;
       setKnobPos(knobLeft);
-      statusEl.textContent = "Ready.";
+      statusEl.textContent = 'Not far enough — try again.';
       statusEl.className = "status";
-    });
+    }
+  });
 
-    knob.style.left = knobLeft + "px";
-    window.addEventListener('load', () => {
-      updateDimensions();
-      setKnobPos(knobLeft);
-    });
-  </script>
+  async function onUnlocked() {
+    statusEl.textContent = "Sending unlock request...";
+
+    try {
+      const response = await fetch(RPC_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      });
+
+      const text = await response.text();
+
+      if (response.ok) {
+        statusEl.textContent = "Success: " + text;
+        statusEl.className = "status success";
+      } else {
+        statusEl.textContent = "Error: " + text;
+        statusEl.className = "status error";
+      }
+    } catch (err) {
+      statusEl.textContent = "Network error – see console.";
+      statusEl.className = "status error";
+      console.error(err);
+    }
+  }
+
+  resetBtn.addEventListener('click', () => {
+    knobLeft = 10;
+    setKnobPos(knobLeft);
+    statusEl.textContent = "Ready.";
+    statusEl.className = "status";
+  });
+
+  knob.style.left = knobLeft + "px";
+
+  window.addEventListener('load', () => {
+    updateDimensions();
+    setKnobPos(knobLeft);
+  });
+</script>
 </body>
 </html>
