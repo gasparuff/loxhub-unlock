@@ -33,7 +33,6 @@
     h1{margin:0 0 8px 0;font-size:20px}
     p{margin:0 0 18px 0;color:var(--muted);font-size:13px}
 
-    /* slider */
     .slider{
       position:relative;
       height:66px;
@@ -129,225 +128,130 @@
       border-radius:8px;
       cursor:pointer;
     }
-
-    /* responsive */
-    @media (max-width:420px){
-      .card{padding:18px}
-      .slider{height:56px}
-      .knob{width:48px;height:48px}
-    }
   </style>
 </head>
 <body>
-  <div class="card" role="main">
+  <div class="card">
     <h1>Swipe to unlock</h1>
-    <p>Slide the knob to the right to trigger the door open command. This will execute a POST equivalent to the `curl` you provided.</p>
+    <p>Slide the knob to the right to trigger the unlock endpoint.</p>
 
-    <div id="sliderContainer" class="slider" aria-label="Swipe to unlock slider">
+    <div id="sliderContainer" class="slider">
       <div class="track"></div>
       <div id="progress" class="progress"></div>
-      <div id="hint" class="hint">Swipe to open the door →</div>
-      <div id="knob" class="knob" role="button" tabindex="0" aria-label="Drag knob to unlock">
-        <div class="arrow" aria-hidden="true"></div>
+      <div id="hint" class="hint">Swipe to unlock →</div>
+      <div id="knob" class="knob">
+        <div class="arrow"></div>
       </div>
     </div>
 
     <div class="status" id="status">Ready.</div>
 
     <div class="small">
-      <strong>Note:</strong> Replace the AUTH token inside the script before publishing. If you see CORS errors in the console, the API server must enable CORS or you need a proxy.
       <button id="resetBtn" class="reset">Reset slider</button>
     </div>
   </div>
 
   <script>
-    // ===== CONFIG - replace token if needed =====
-    const AUTH_TOKEN = 'Basic Y29ubmVjdEBsb3hodWIuaW86U3VwZXJTdGF5'; // <<-- replace with real Authorization header value
-    const RPC_URL = 'https://9hwex3wn.cloud.glutz-eaccess.com/rpc/';
-    const REFERER = 'https://9hwex3wn.cloud.glutz-eaccess.com/';
+    const RPC_URL = "https://ubmaawldxixfdrpiiaut.supabase.co/functions/v1/unlock";
 
-    // The JSON-RPC body (matching the curl)
-    const rpcBody = {
-      method: "eAccess.deviceOperation",
-      params: [
-        "OpenDoor",
-        {
-          deviceid: "555.948.911",
-          action: 2,
-          outputs: 1,
-          hasMotor: true
-        }
-      ],
-      id: 18,
-      jsonrpc: "2.0"
-    };
-
-    // ===== Slider logic =====
     const knob = document.getElementById('knob');
     const container = document.getElementById('sliderContainer');
     const progress = document.getElementById('progress');
-    const hint = document.getElementById('hint');
     const statusEl = document.getElementById('status');
     const resetBtn = document.getElementById('resetBtn');
 
     let dragging = false;
     let startX = 0;
-    let knobLeft = 10; // initial left (px)
+    let knobLeft = 10;
     let maxLeft = 0;
     let containerRect = null;
 
     function updateDimensions(){
       containerRect = container.getBoundingClientRect();
-      // knob width
       const knobRect = knob.getBoundingClientRect();
-      maxLeft = containerRect.width - knobRect.width - 10; // -10 padding
+      maxLeft = containerRect.width - knobRect.width - 10;
     }
 
-    // initialize
     updateDimensions();
     window.addEventListener('resize', updateDimensions);
 
     function setKnobPos(px){
-      // clamp
       px = Math.max(10, Math.min(px, maxLeft + 10));
       knob.style.left = px + 'px';
-      const progW = (px - 10) + (knob.offsetWidth);
-      progress.style.width = Math.max(0, Math.min(containerRect.width - 20, progW)) + 'px';
+
+      const progW = (px - 10) + knob.offsetWidth;
+      progress.style.width = Math.max(0, Math.min(containerRect.width - 20, progW)) + "px";
     }
 
-    // pointer events (works for mouse & touch)
-    knob.addEventListener('pointerdown', (e)=>{
-      e.preventDefault();
+    knob.addEventListener('pointerdown', e => {
       dragging = true;
-      startX = e.clientX || (e.touches && e.touches[0].clientX);
+      startX = e.clientX;
       knob.setPointerCapture(e.pointerId);
-      knob.classList.add('dragging');
     });
 
-    document.addEventListener('pointermove', (e)=>{
+    document.addEventListener('pointermove', e => {
       if(!dragging) return;
-      const clientX = e.clientX;
-      const delta = clientX - startX;
+      const delta = e.clientX - startX;
       const newLeft = knobLeft + delta;
       setKnobPos(newLeft);
     });
 
-    document.addEventListener('pointerup', (e)=>{
+    document.addEventListener('pointerup', () => {
       if(!dragging) return;
       dragging = false;
-      // compute final position
+
       const knobRect = knob.getBoundingClientRect();
       const relative = knobRect.left - containerRect.left;
-      // threshold: 80% to the right
-      const threshold = Math.max(0.75 * (containerRect.width - knobRect.width), 10);
+      const threshold = 0.75 * (containerRect.width - knobRect.width);
+
       if(relative >= threshold){
-        // success
         setKnobPos(maxLeft + 10);
         onUnlocked();
       } else {
-        // reset
         knobLeft = 10;
         setKnobPos(knobLeft);
         statusEl.textContent = 'Not far enough — try again.';
-        statusEl.className = 'status';
       }
     });
-
-    // make keyboard accessible: Enter or ArrowRight triggers a success
-    knob.addEventListener('keydown', (e)=>{
-      if(e.key === 'Enter' || e.key === ' '){
-        e.preventDefault();
-        // simulate direct unlock
-        setKnobPos(maxLeft + 10);
-        onUnlocked();
-      }
-      if(e.key === 'ArrowRight'){
-        e.preventDefault();
-        setKnobPos(maxLeft + 10);
-        onUnlocked();
-      }
-      if(e.key === 'ArrowLeft'){
-        e.preventDefault();
-        knobLeft = 10;
-        setKnobPos(knobLeft);
-      }
-    });
-
-    // Also support clicking container to nudge
-    container.addEventListener('click', (e)=>{
-      // ignore clicks on knob while dragging
-      if(dragging) return;
-      // Move knob toward click
-      const clickX = e.clientX - containerRect.left;
-      const target = Math.max(10, Math.min(clickX - knob.offsetWidth/2, maxLeft + 10));
-      setKnobPos(target);
-    });
-
-    function lockUI(){
-      knob.style.pointerEvents = 'none';
-      container.style.pointerEvents = 'none';
-    }
-    function unlockUI(){
-      knob.style.pointerEvents = '';
-      container.style.pointerEvents = '';
-    }
 
     async function onUnlocked(){
-      lockUI();
-      statusEl.textContent = 'Sending unlock command...';
-      statusEl.className = 'status';
+      statusEl.textContent = "Sending unlock request...";
 
       try {
         const response = await fetch(RPC_URL, {
-          method: 'POST',
-          mode: 'cors',
-          headers: {
-            'Referer': REFERER,
-            'Content-Type': 'application/json',
-            'Authorization': AUTH_TOKEN
-          },
-          body: JSON.stringify(rpcBody)
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}"
         });
 
-        // attempt to parse JSON
-        let parsed = null;
-        let text = await response.text();
-        try { parsed = JSON.parse(text); } catch(e){ parsed = null; }
+        const text = await response.text();
 
-        if(!response.ok){
-          statusEl.textContent = 'Server error: ' + response.status + ' ' + response.statusText;
-          statusEl.className = 'status error';
-          console.error('Unlock response (non-ok):', response.status, text);
+        if(response.ok){
+          statusEl.textContent = "Success: " + text;
+          statusEl.className = "status success";
         } else {
-          statusEl.textContent = 'Command sent — server response: ' + (parsed ? JSON.stringify(parsed) : text);
-          statusEl.className = 'status success';
-          console.log('Unlock success:', parsed ?? text);
+          statusEl.textContent = "Error: " + text;
+          statusEl.className = "status error";
         }
       } catch (err) {
-        statusEl.textContent = 'Network error or CORS blocked. See console for details.';
-        statusEl.className = 'status error';
-        console.error('Unlock fetch error:', err);
+        statusEl.textContent = "Network error – see console.";
+        statusEl.className = "status error";
+        console.error(err);
       }
     }
 
-    // Reset button
-    resetBtn.addEventListener('click', ()=>{
+    resetBtn.addEventListener('click', () => {
       knobLeft = 10;
       setKnobPos(knobLeft);
-      statusEl.textContent = 'Ready.';
-      statusEl.className = 'status';
-      unlockUI();
+      statusEl.textContent = "Ready.";
+      statusEl.className = "status";
     });
 
-    // set initial knob left style
-    knob.style.position = 'absolute';
-    knob.style.left = knobLeft + 'px';
-    // set tabindex and role already set in markup
-    // ensure dimensions after fonts load
-    window.addEventListener('load', ()=>{ updateDimensions(); setKnobPos(knobLeft); });
-
-    // Accessibility tip: announce when unlocked (live region)
-    // (here we already update #status text so screen readers will pick it up)
+    knob.style.left = knobLeft + "px";
+    window.addEventListener('load', () => {
+      updateDimensions();
+      setKnobPos(knobLeft);
+    });
   </script>
 </body>
 </html>
